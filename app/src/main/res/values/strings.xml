@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">ycBtn</string>
+    <string name="accessibility_service_description">This service helps operate floating buttons for easier navigation</string>
+</resources>
