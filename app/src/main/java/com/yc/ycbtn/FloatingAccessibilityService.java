@@ -36,7 +36,26 @@ public class FloatingAccessibilityService extends AccessibilityService {
     private int currentDirectionX = 0;
     private int currentDirectionY = 0;
     private final long MOVE_INTERVAL = 100; // 移动间隔(ms)
+    private static final long HIDE_TIMEOUT = 5000; // 5秒无操作隐藏
+    private Runnable hideRunnable = this::hideDot;
+    private boolean isActive = true;
 
+    // 在现有成员变量后添加
+    private void hideDot() {
+        if (isActive) {
+            dotView.setVisibility(View.INVISIBLE);
+            isActive = false;
+        }
+    }
+
+    private void showDot() {
+        if (!isActive) {
+            dotView.setVisibility(View.VISIBLE);
+        }
+        isActive = true;
+        autoMoveHandler.removeCallbacks(hideRunnable);
+        autoMoveHandler.postDelayed(hideRunnable, HIDE_TIMEOUT);
+    }
     // 创建持续移动的Runnable
     private Runnable autoMoveRunnable = new Runnable() {
         @Override
@@ -282,6 +301,7 @@ public class FloatingAccessibilityService extends AccessibilityService {
         windowManager.addView(dotView, dotParams);
         dotView.setX(dotX);
         dotView.setY(dotY);
+        dotView.setVisibility(View.VISIBLE);
         dotView.bringToFront();
     }
 
@@ -318,8 +338,13 @@ public class FloatingAccessibilityService extends AccessibilityService {
         leftBtn.setOnTouchListener((v, event) -> handleTouchEvent(event, -1, 0));
         rightBtn.setOnTouchListener((v, event) -> handleTouchEvent(event, 1, 0));
         confirmBtn.setOnClickListener(v -> performTapAt(dotX, dotY));
-        
+       
         windowManager.updateViewLayout(floatingView, controlParams);
+        // 在添加按钮监听后添加面板触摸监听
+        floatingView.setOnTouchListener((v, event) -> {
+            showDot();
+            return false;
+        });
     }
     // 新增触摸事件处理方法
     private boolean handleTouchEvent(MotionEvent event, int dirX, int dirY) {
@@ -421,6 +446,7 @@ public class FloatingAccessibilityService extends AccessibilityService {
         // 获取屏幕尺寸
         DisplayMetrics metrics = new DisplayMetrics();
         windowManager.getDefaultDisplay().getMetrics(metrics);
+        showDot(); // 移动时保持可见
         
         // 计算新位置
         int newX = Math.max(0, Math.min(metrics.widthPixels - DOT_SIZE, dotX + dx));
