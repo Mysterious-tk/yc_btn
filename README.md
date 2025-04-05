@@ -1,1 +1,5 @@
-virtual button helper for android
+# android 5.1.1下的虚拟按键
+文艺复兴下的产物，需要配合xpose和ycXposeInjectEvent项目来实现虚拟按键功能。
+## 功能
+1. 支持按钮缩小和恢复。
+2. 支持虚拟按键，给别的进程发手势事件
