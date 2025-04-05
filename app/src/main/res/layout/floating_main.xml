@@ -1,0 +1,18 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/main_layout"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_floating">
+
+    <ImageButton
+        android:id="@+id/btn_minimize"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:src="@drawable/ic_minimize"
+        android:contentDescription="@string/desc_minimize" 
+        android:background="@null"/>
+
+    <!-- 假设 floating_buttons 是原有按钮布局 -->
+    <include layout="@layout/floating_buttons"/>
+</LinearLayout>

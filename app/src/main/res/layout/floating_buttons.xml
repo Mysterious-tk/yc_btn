@@ -50,14 +50,14 @@
         android:text="→"/>
         
     <Button
-    android:id="@+id/page_up_button"
+    android:id="@+id/btn_page_up"
     android:layout_width="48dp"
     android:layout_height="48dp"
     android:text="PgUp"/>
 
     <Button
-        android:id="@+id/page_down_button"
+        android:id="@+id/btn_page_down"
         android:layout_width="48dp"
-        android:layout_height="48dp"
+        android:layout_height="144dp"
         android:text="PgDn"/>
 </LinearLayout>
