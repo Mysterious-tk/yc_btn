@@ -1,0 +1,67 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:padding="16dp">
+
+    <!-- 删除原6-16行的ImageView -->
+    
+    <!-- 控制按钮容器保持原有结构 -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentRight="true"
+        android:layout_centerVertical="true"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_marginLeft="20dp"
+        android:clickable="false"
+        android:focusable="false"
+        android:background="@android:color/transparent">
+
+        <!-- 保留原有按钮布局结构 -->
+        <RelativeLayout 
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="16dp">
+            
+            <!-- 控制按钮容器保持原有属性 -->
+            <LinearLayout
+                android:id="@+id/control_panel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center">
+                
+                <ImageButton
+                    android:id="@+id/up_btn"
+                    android:layout_width="@dimen/button_size"
+                    android:layout_height="@dimen/button_size"
+                    android:src="@drawable/ic_up" />
+                    
+                <ImageButton
+                    android:id="@+id/left_btn"
+                    android:layout_width="@dimen/button_size"
+                    android:layout_height="@dimen/button_size"
+                    android:src="@drawable/ic_left" />
+                    
+                <ImageButton
+                    android:id="@+id/right_btn"
+                    android:layout_width="@dimen/button_size"
+                    android:layout_height="@dimen/button_size"
+                    android:src="@drawable/ic_right" />
+                    
+                <ImageButton
+                    android:id="@+id/down_btn"
+                    android:layout_width="@dimen/button_size"
+                    android:layout_height="@dimen/button_size"
+                    android:src="@drawable/ic_down" />
+                    
+                <ImageButton
+                    android:id="@+id/confirm_btn"
+                    android:layout_width="@dimen/button_size"
+                    android:layout_height="@dimen/button_size"
+                    android:src="@drawable/ic_enter" />
+            </LinearLayout> <!-- 添加缺失的LinearLayout闭合标签 -->
+        </RelativeLayout> <!-- 闭合内层RelativeLayout -->
+    </LinearLayout>
+</RelativeLayout> <!-- 闭合外层RelativeLayout -->

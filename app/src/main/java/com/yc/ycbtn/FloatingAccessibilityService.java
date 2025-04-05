@@ -1,13 +1,18 @@
 package com.yc.ycbtn;
 
 
+import android.graphics.PixelFormat;
 import android.hardware.input.InputManager;
 import android.os.Handler;  // 添加这行
 import android.os.Looper;    // 添加这行
 import android.os.SystemClock;
 import android.util.Log;
 import android.accessibilityservice.AccessibilityService;
+import android.view.LayoutInflater;
 import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -19,9 +24,30 @@ import android.view.InputEvent;
 import android.view.InputDevice;
 import java.lang.reflect.Method;
 import android.app.Instrumentation;
+import android.widget.Button;
+import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.view.Gravity;
+import android.util.DisplayMetrics;
 
 public class FloatingAccessibilityService extends AccessibilityService {
-    // 移除dispatchKeyEvent的重写方法
+    private Handler autoMoveHandler = new Handler();
+    private boolean isMoving = false;
+    private int currentDirectionX = 0;
+    private int currentDirectionY = 0;
+    private final long MOVE_INTERVAL = 100; // 移动间隔(ms)
+
+    // 创建持续移动的Runnable
+    private Runnable autoMoveRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isMoving) {
+                moveDot(currentDirectionX * MOVE_STEP, currentDirectionY * MOVE_STEP);
+                autoMoveHandler.postDelayed(this, MOVE_INTERVAL);
+            }
+        }
+    };
+    
 
     private void injectKeyEvent(int keyCode) {
         new Thread(() -> {
@@ -210,16 +236,292 @@ public class FloatingAccessibilityService extends AccessibilityService {
         }
     };
 
+    // 在类顶部成员变量区添加
+    private WindowManager.LayoutParams dotParams;
+    private WindowManager.LayoutParams controlParams;
+    private WindowManager windowManager;
+    private View floatingView;
+    private ImageView dotView;
+    private int dotX = 500; // 圆点初始X位置
+    private int dotY = 500; // 圆点初始Y位置
+    private static final int DOT_SIZE = 30; // 圆点大小
+    private static final int BUTTON_SIZE = 80; // 按钮大小
+    private static final int MOVE_STEP = 20; // 每次移动步长
+    
+    // 新增圆点视图初始化方法
+    // 在圆点初始化方法中明确设置尺寸
+    private void initDotView() {
+        dotParams = new WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O 
+                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY 
+                : WindowManager.LayoutParams.TYPE_SYSTEM_ALERT,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS |
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE, // 新增触摸事件穿透标志
+            PixelFormat.TRANSLUCENT
+        );
+        dotParams.gravity = Gravity.TOP | Gravity.LEFT;
+        dotParams.width = DOT_SIZE;  // 明确设置固定宽度
+        dotParams.height = DOT_SIZE; // 明确设置固定高度
+        
+        dotView = new ImageView(this);
+        dotView.setImageResource(R.drawable.dot_circle);
+        dotView.setLayoutParams(new ViewGroup.LayoutParams(
+            getResources().getDimensionPixelSize(R.dimen.dot_size),
+            getResources().getDimensionPixelSize(R.dimen.dot_size)
+        ));
+        
+        DisplayMetrics metrics = new DisplayMetrics();
+        windowManager.getDefaultDisplay().getMetrics(metrics);
+        // 修复圆点初始位置计算（考虑圆点自身尺寸）
+        dotX = (metrics.widthPixels - DOT_SIZE) / 2;
+        dotY = (metrics.heightPixels - DOT_SIZE) / 2;
+        
+        windowManager.addView(dotView, dotParams);
+        dotView.setX(dotX);
+        dotView.setY(dotY);
+        dotView.bringToFront();
+    }
+
+    // 新增控制面板初始化方法
+    private void initControlPanel() {
+        controlParams = new WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O 
+                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY 
+                : WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        );
+        controlParams.gravity = Gravity.RIGHT | Gravity.CENTER_VERTICAL;
+        controlParams.x = -30; // 确保控制键紧贴屏幕右边
+        controlParams.y = 600;
+        controlParams.width = WindowManager.LayoutParams.WRAP_CONTENT;
+        controlParams.height = WindowManager.LayoutParams.WRAP_CONTENT;
+        
+        floatingView = LayoutInflater.from(this).inflate(R.layout.floating_controller, null);
+        windowManager.addView(floatingView, controlParams);
+        
+        // 初始化按钮事件监听
+        ImageButton upBtn = floatingView.findViewById(R.id.up_btn);
+        ImageButton downBtn = floatingView.findViewById(R.id.down_btn);
+        ImageButton leftBtn = floatingView.findViewById(R.id.left_btn);
+        ImageButton rightBtn = floatingView.findViewById(R.id.right_btn);
+        ImageButton confirmBtn = floatingView.findViewById(R.id.confirm_btn);
+        
+        upBtn.setOnTouchListener((v, event) -> handleTouchEvent(event, 0, -1));
+        downBtn.setOnTouchListener((v, event) -> handleTouchEvent(event, 0, 1));
+        leftBtn.setOnTouchListener((v, event) -> handleTouchEvent(event, -1, 0));
+        rightBtn.setOnTouchListener((v, event) -> handleTouchEvent(event, 1, 0));
+        confirmBtn.setOnClickListener(v -> performTapAt(dotX, dotY));
+        
+        windowManager.updateViewLayout(floatingView, controlParams);
+    }
+    // 新增触摸事件处理方法
+    private boolean handleTouchEvent(MotionEvent event, int dirX, int dirY) {
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                isMoving = true;
+                currentDirectionX = dirX;
+                currentDirectionY = dirY;
+                autoMoveHandler.post(autoMoveRunnable); // 立即开始移动
+                return true;
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                isMoving = false;
+                currentDirectionX = 0;
+                currentDirectionY = 0;
+                autoMoveHandler.removeCallbacks(autoMoveRunnable); // 停止移动
+                return true;
+        }
+        return false;
+    }
+    // 在onServiceConnected方法中添加悬浮窗初始化
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
         registerReceiver(actionReceiver, new IntentFilter("com.yc.ycbtn.ACTION_PERFORM_GLOBAL_ACTION"));
+        
+        // 初始化窗口管理器
+        windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        
+        // 分离初始化逻辑
+        initControlPanel();  // 控制面板初始化
+        initDotView();       // 圆点视图初始化
+        
+        // 定义 metrics 变量
+        DisplayMetrics metrics = new DisplayMetrics();
+        windowManager.getDefaultDisplay().getMetrics(metrics);
+        
+        // 添加延迟确保视图完成布局
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            // 添加初始化状态验证
+            if (floatingView == null || dotView == null) {
+                Log.e("ViewDebug", "视图初始化失败！floatingView:" + floatingView + " dotView:" + dotView);
+                return;
+            }
+            
+            // 强制测量布局（添加异常捕获）
+            try {
+                floatingView.measure(
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                    View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+                );
+                floatingView.layout(0, 0, floatingView.getMeasuredWidth(), floatingView.getMeasuredHeight());
+            } catch (Exception e) {
+                Log.e("ViewDebug", "视图测量异常", e);
+            }
+            
+            // 添加圆点视图验证
+            if (dotView.getParent() == null) {
+                Log.w("ViewDebug", "圆点视图未附加到窗口");
+                windowManager.addView(dotView, dotParams); // 需要定义dotParams为类成员变量
+            }
+            
+
+            // 重新设置圆点位置（修复坐标转换问题）
+            dotView.setX(dotX);
+            dotView.setY(dotY);
+            dotView.bringToFront();
+            windowManager.updateViewLayout(dotView, dotParams);
+            // 添加调试日志
+            Log.d("ViewDebug", "悬浮窗尺寸: " + floatingView.getWidth() + "x" + floatingView.getHeight());
+            Log.d("ViewDebug", "圆点坐标: " + dotView.getX() + "," + dotView.getY());
+            
+            // 修改测量方式为屏幕尺寸
+            floatingView.measure(
+            View.MeasureSpec.makeMeasureSpec(metrics.widthPixels, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(metrics.heightPixels, View.MeasureSpec.EXACTLY)
+            );
+            
+            // 使用绝对坐标系设置位置（替代原相对坐标计算）
+            dotView.setX(dotX);
+            dotView.setY(dotY);
+
+            // 添加边界验证日志
+            Log.d("ViewDebug", "悬浮窗位置 L:" + floatingView.getLeft() 
+            + " T:" + floatingView.getTop() 
+            + " R:" + floatingView.getRight() 
+            + " B:" + floatingView.getBottom());
+            
+            dotView.layout(dotX, dotY, dotX + DOT_SIZE, dotY + DOT_SIZE);
+            windowManager.updateViewLayout(dotView, dotParams);
+            windowManager.updateViewLayout(floatingView, controlParams);
+            dotView.setVisibility(View.VISIBLE);
+        }, 300); // 补全postDelayed的括号
+    }  // 修正方法闭合括号位置
+    
+    // 移动圆点的方法
+    // 在moveDot方法中添加同步校验
+    private void moveDot(int dx, int dy) {
+        // 获取屏幕尺寸
+        DisplayMetrics metrics = new DisplayMetrics();
+        windowManager.getDefaultDisplay().getMetrics(metrics);
+        
+        // 计算新位置
+        int newX = Math.max(0, Math.min(metrics.widthPixels - DOT_SIZE, dotX + dx));
+        int newY = Math.max(0, Math.min(metrics.heightPixels - DOT_SIZE, dotY + dy));
+        
+        dotX = newX;
+        dotY = newY;
+        
+        // 更新圆点位置参数
+        // 替换坐标设置方式
+        dotParams.x = dotX;
+        dotParams.y = dotY;
+        
+        try {
+            // 同时更新两个视图
+            windowManager.updateViewLayout(dotView, dotParams);
+            windowManager.updateViewLayout(floatingView, controlParams);  // 修正参数名称
+            
+            // 添加布局更新日志
+            Log.d("ViewLayout", "圆点布局参数更新 [X:" + dotParams.x 
+                + " Y:" + dotParams.y 
+                + " W:" + dotParams.width 
+                + " H:" + dotParams.height + "]");
+                
+            Log.d("ViewLayout", "控制面板参数更新 [X:" + controlParams.x 
+                + " Y:" + controlParams.y 
+                + " W:" + controlParams.width 
+                + " H:" + controlParams.height + "]");
+
+            windowManager.updateViewLayout(dotView, dotParams);
+            windowManager.updateViewLayout(floatingView, controlParams);
+            
+            // 添加调试日志
+            Log.d("ViewPosition", "圆点位置 X:" + dotX + " Y:" + dotY);
+        } catch (IllegalArgumentException e) {
+            Log.e("ViewUpdate", "视图未附加到窗口", e);
+        }
+        
+        // 添加调试日志
+        Log.d("ViewPosition", "圆点位置 X:" + dotX + " Y:" + dotY);
+    
+    // 添加校验日志
+    Log.d("PositionSync", "参数坐标 X:" + dotParams.x + " 实际坐标 X:" + dotView.getX());
+    Log.d("PositionSync", "参数坐标 Y:" + dotParams.y + " 实际坐标 Y:" + dotView.getY());
+    }
+    
+    // 在指定位置执行点击的方法
+    private void performTapAt(int x, int y) {
+        final long downTime = SystemClock.uptimeMillis();
+        
+        // 创建按下事件
+        MotionEvent downEvent = MotionEvent.obtain(
+            downTime, downTime,
+            MotionEvent.ACTION_DOWN,
+            1,
+            new MotionEvent.PointerProperties[] { createPointerProp(0) },
+            new MotionEvent.PointerCoords[] { createPointerCoord(x, y) },
+            0, 0, 1.0f, 1.0f, 1, 0,
+            InputDevice.SOURCE_TOUCHSCREEN,
+            0
+        );
+        
+        // 创建抬起事件
+        MotionEvent upEvent = MotionEvent.obtain(
+            downTime, downTime + 100,
+            MotionEvent.ACTION_UP,
+            1,
+            new MotionEvent.PointerProperties[] { createPointerProp(0) },
+            new MotionEvent.PointerCoords[] { createPointerCoord(x, y) },
+            0, 0, 1.0f, 1.0f, 1, 0,
+            InputDevice.SOURCE_TOUCHSCREEN,
+            0
+        );
+        
+        try {
+            Class<?> inputManagerClass = Class.forName("android.hardware.input.InputManager");
+            Method getInstanceMethod = inputManagerClass.getDeclaredMethod("getInstance");
+            InputManager im = (InputManager) getInstanceMethod.invoke(null);
+            
+            Method injectMethod = inputManagerClass.getMethod(
+                "injectInputEvent", InputEvent.class, int.class);
+            
+            injectMethod.invoke(im, downEvent, 0);
+
+            injectMethod.invoke(im, upEvent, 0);
+        } catch (Exception e) {
+            Log.e("Accessibility", "发送点击事件失败", e);
+        } finally {
+            downEvent.recycle();
+            upEvent.recycle();
+        }
     }
 
+    // 在onDestroy中移除悬浮窗
     @Override
     public void onDestroy() {
         super.onDestroy();
         unregisterReceiver(actionReceiver);
+        if (floatingView != null) {
+            windowManager.removeView(floatingView);
+        }
     }
     public void onAccessibilityEvent(AccessibilityEvent event) {}
     

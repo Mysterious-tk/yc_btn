@@ -1,0 +1,4 @@
+<resources>
+    <dimen name="dot_size">30dp</dimen>
+    <dimen name="button_size">50dp</dimen>
+</resources>
